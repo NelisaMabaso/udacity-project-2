@@ -1,16 +1,19 @@
 import json
 import plotly
 import pandas as pd
+import zipfile
+import os
+import tempfile
 
+import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+from sklearn.base import BaseEstimator, TransformerMixin  # Add this import
 
-from flask import Flask
-from flask import render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from plotly.graph_objs import Bar
 import joblib
 from sqlalchemy import create_engine
-
 
 app = Flask(__name__)
 
@@ -25,12 +28,54 @@ def tokenize(text):
 
     return clean_tokens
 
+# Define the StartingVerbExtractor class
+class StartingVerbExtractor(BaseEstimator, TransformerMixin):
+    def starting_verb(self, text):
+        sentence_list = nltk.sent_tokenize(text)
+        for sentence in sentence_list:
+            pos_tags = nltk.pos_tag(word_tokenize(sentence))
+            first_word, first_tag = pos_tags[0]
+            if first_tag in ['VB', 'VBP'] or first_word == 'RT':
+                return True
+        return False
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X_tagged = pd.Series(X).apply(self.starting_verb)
+        return pd.DataFrame(X_tagged)
+
 # load data
 engine = create_engine('sqlite:///../data/DisasterResponse.db')
 df = pd.read_sql_table('DisasterResponse', engine)
 
-# load model
-model = joblib.load("../model.pkl")
+zip_filepath = '../models/classifier.zip'
+model = None
+
+try:
+    with zipfile.ZipFile(zip_filepath, 'r') as zip_ref:
+        # Check if the classifier.pkl file exists in the zip
+        if 'classifier.pkl' not in zip_ref.namelist():
+            raise FileNotFoundError("classifier.pkl not found in the zip file")
+        
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            zip_ref.extract('classifier.pkl', tmpdirname)
+            model_path = os.path.join(tmpdirname, 'classifier.pkl')
+            model = joblib.load(model_path)
+
+except FileNotFoundError as e:
+    print(f"Error: {e}")
+
+except zipfile.BadZipFile:
+    print("Error: The file is not a zip file or is corrupted")
+    
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
+
+if model is None:
+    print("Failed to load the model. The application may not function correctly.")
 
 
 # index webpage displays cool visuals and receives user input text for model
@@ -39,21 +84,27 @@ model = joblib.load("../model.pkl")
 def index():
     
     # extract data needed for visuals
-    # TODO: Below is an example - modify to extract data for your own visuals
+
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
+
+    # Creating a custom visual for category distribution
+    category_counts = df.iloc[:, 4:].sum() 
+    category_names = list(category_counts.index)
     
     # create visuals
     # TODO: Below is an example - modify to create your own visuals
+    # Create visuals
     graphs = [
         {
             'data': [
                 Bar(
                     x=genre_names,
-                    y=genre_counts
+                    y=genre_counts,
+                    name='Message Genres',
+                    marker=dict(color='blue')
                 )
             ],
-
             'layout': {
                 'title': 'Distribution of Message Genres',
                 'yaxis': {
@@ -63,13 +114,32 @@ def index():
                     'title': "Genre"
                 }
             }
+        },
+        {
+            'data': [
+                Bar(
+                    x=category_names,
+                    y=category_counts,
+                    name='Message Categories',
+                    marker=dict(color='orange')
+                )
+            ],
+            'layout': {
+                'title': 'Distribution of Messages by Category',
+                'yaxis': {
+                    'title': "Count"
+                },
+                'xaxis': {
+                    'title': "Category"
+                } 
+            }
         }
     ]
     
     # encode plotly graphs in JSON
     ids = ["graph-{}".format(i) for i, _ in enumerate(graphs)]
     graphJSON = json.dumps(graphs, cls=plotly.utils.PlotlyJSONEncoder)
-    
+
     # render web page with plotly graphs
     return render_template('master.html', ids=ids, graphJSON=graphJSON)
 
@@ -98,3 +168,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
