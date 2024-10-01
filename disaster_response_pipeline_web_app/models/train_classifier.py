@@ -2,6 +2,7 @@
 import sys
 from sqlalchemy import create_engine
 import pickle
+import os
 
 # Importing necessary libraries from nltk for text processing
 import nltk
@@ -180,15 +181,22 @@ def evaluate_model(model, X_test, Y_test, category_names):
 
 def save_model(model, model_filepath):
     """
-    Save the trained model to a file.
-
+    Save the trained model as a pickle file.
+    
     Args:
-        model (Pipeline): Trained machine learning model.
-        model_filepath (str): Filepath to save the model (as a pickle file).
+        model: Trained model to be saved.
+        model_filepath (str): The filepath where the pickle file will be saved.
     """
-    # Open the file in write-binary mode and save the model using pickle
+    # Create the directory if it doesn't exist
+    directory = os.path.dirname(model_filepath)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Save the model to the specified filepath
     with open(model_filepath, 'wb') as f:
         pickle.dump(model, f)
+
+    print(f"Model saved to {model_filepath}")
 
 
 def main():
