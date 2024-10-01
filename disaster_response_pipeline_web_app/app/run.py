@@ -18,6 +18,15 @@ from sqlalchemy import create_engine
 app = Flask(__name__)
 
 def tokenize(text):
+    """
+    Tokenize and lemmatize input text.
+
+    Args:
+        text (str): The input text to be tokenized.
+
+    Returns:
+        list: A list of cleaned and lemmatized tokens.
+    """
     tokens = word_tokenize(text)
     lemmatizer = WordNetLemmatizer()
 
@@ -28,9 +37,21 @@ def tokenize(text):
 
     return clean_tokens
 
-# Define the StartingVerbExtractor class
 class StartingVerbExtractor(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer to identify whether a sentence starts with a verb.
+    """
+    
     def starting_verb(self, text):
+        """
+        Check if the first word of the text is a verb.
+
+        Args:
+            text (str): The input text to check.
+
+        Returns:
+            bool: True if the first word is a verb, False otherwise.
+        """
         sentence_list = nltk.sent_tokenize(text)
         for sentence in sentence_list:
             pos_tags = nltk.pos_tag(word_tokenize(sentence))
@@ -40,13 +61,32 @@ class StartingVerbExtractor(BaseEstimator, TransformerMixin):
         return False
 
     def fit(self, X, y=None):
+        """
+        Fit the transformer. This method does nothing but is required for compatibility.
+
+        Args:
+            X: Ignored.
+            y: Ignored.
+
+        Returns:
+            self: Returns an instance of the transformer.
+        """
         return self
 
     def transform(self, X):
+        """
+        Transform the input data by applying the starting verb check.
+
+        Args:
+            X (pd.Series): Input series of text data.
+
+        Returns:
+            pd.DataFrame: DataFrame with boolean values indicating the presence of starting verbs.
+        """
         X_tagged = pd.Series(X).apply(self.starting_verb)
         return pd.DataFrame(X_tagged)
 
-# load data
+# Load data from SQLite database
 engine = create_engine('sqlite:///../data/DisasterResponse.db')
 df = pd.read_sql_table('DisasterResponse', engine)
 
@@ -77,14 +117,17 @@ except Exception as e:
 if model is None:
     print("Failed to load the model. The application may not function correctly.")
 
-
 # index webpage displays cool visuals and receives user input text for model
 @app.route('/')
 @app.route('/index')
 def index():
-    
-    # extract data needed for visuals
+    """
+    Render the index page with visualizations of the disaster response data.
 
+    Returns:
+        str: Rendered HTML for the index page with visualizations.
+    """
+    # Extract data needed for visuals
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
 
@@ -92,8 +135,6 @@ def index():
     category_counts = df.iloc[:, 4:].sum() 
     category_names = list(category_counts.index)
     
-    # create visuals
-    # TODO: Below is an example - modify to create your own visuals
     # Create visuals
     graphs = [
         {
@@ -136,36 +177,43 @@ def index():
         }
     ]
     
-    # encode plotly graphs in JSON
+    # Encode plotly graphs in JSON
     ids = ["graph-{}".format(i) for i, _ in enumerate(graphs)]
     graphJSON = json.dumps(graphs, cls=plotly.utils.PlotlyJSONEncoder)
 
-    # render web page with plotly graphs
+    # Render web page with plotly graphs
     return render_template('master.html', ids=ids, graphJSON=graphJSON)
 
-
-# web page that handles user query and displays model results
+# Web page that handles user query and displays model results
 @app.route('/go')
 def go():
-    # save user input in query
+    """
+    Handle user query and display model results.
+
+    Returns:
+        str: Rendered HTML for the results page with user query and classification results.
+    """
+    # Save user input in query
     query = request.args.get('query', '') 
 
-    # use model to predict classification for query
+    # Use model to predict classification for query
     classification_labels = model.predict([query])[0]
     classification_results = dict(zip(df.columns[4:], classification_labels))
 
-    # This will render the go.html Please see that file. 
+    # This will render the go.html. Please see that file. 
     return render_template(
         'go.html',
         query=query,
         classification_result=classification_results
     )
 
-
 def main():
-    app.run(host='0.0.0.0', port=3001, debug=True)
+    """
+    Start the Flask application.
 
+    This function runs the Flask app with debugging enabled.
+    """
+    app.run(host='0.0.0.0', port=3001, debug=True)
 
 if __name__ == '__main__':
     main()
-
