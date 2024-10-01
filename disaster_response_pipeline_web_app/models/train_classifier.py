@@ -1,7 +1,10 @@
 # import libraries
 import sys
+import zipfile
 from sqlalchemy import create_engine
 import pickle
+import tempfile
+import os
 
 import nltk
 from nltk.tokenize import word_tokenize
@@ -96,8 +99,21 @@ def evaluate_model(model, X_test, Y_test, category_names):
 
 
 def save_model(model, model_filepath):
-    with open('model.pkl', 'wb') as f:
-        pickle.dump(model_filepath, f)
+    # Create a temporary directory
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        # Create a temporary pickle file
+        temp_pickle_path = os.path.join(tmpdirname, 'classifier.pkl')
+        
+        # Save the model to the temporary pickle file
+        with open(temp_pickle_path, 'wb') as f:
+            pickle.dump(model, f)
+        
+        # Create the zip file
+        zip_filepath = model_filepath.replace('.pkl', '.zip')
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(temp_pickle_path, arcname='classifier.pkl')
+    
+    print(f'Model saved and compressed as: {zip_filepath}')
 
 
 def main():
@@ -123,10 +139,9 @@ def main():
 
     else:
         print('Please provide the filepath of the disaster messages database '\
-              'as the first argument and the filepath of the pickle file to '\
+              'as the first argument and the filepath of the zip file to '\
               'save the model to as the second argument. \n\nExample: python '\
-              'train_classifier.py ../data/DisasterResponse.db classifier.pkl')
-
+              'train_classifier.py ../data/DisasterResponse.db classifier.zip')
 
 if __name__ == '__main__':
     main()
